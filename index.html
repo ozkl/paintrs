@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <meta name="color-scheme" content="light dark" />
+    <title>paintrs</title>
+    <link data-trunk rel="rust" data-wasm-opt="z" />
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            background: #1b1b1b;
+            touch-action: none;
+        }
+        @media (prefers-color-scheme: light) {
+            html, body { background: #f0f0f0; }
+        }
+        canvas#paintrs_canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            outline: none;
+        }
+        #loading {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font: 15px system-ui, sans-serif;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="paintrs_canvas"></canvas>
+    <div id="loading">Loading paintrs…</div>
+</body>
+</html>

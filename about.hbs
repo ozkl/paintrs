@@ -1,0 +1,16 @@
+paintrs — third-party licenses
+==============================
+
+paintrs is MIT licensed. It is built on the open source crates below.
+Each group lists the crates distributed under that license, followed by
+the full license text.
+
+{{#each licenses}}
+--------------------------------------------------------------------------------
+{{{name}}} ({{{id}}})
+Used by: {{#each used_by}}{{crate.name}} {{crate.version}}{{#unless @last}}, {{/unless}}{{/each}}
+--------------------------------------------------------------------------------
+
+{{{text}}}
+
+{{/each}}
