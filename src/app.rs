@@ -457,7 +457,10 @@ impl PaintApp {
         for ev in self.platform.poll() {
             match ev {
                 FileEvent::Opened { name, bytes, purpose, path } => match purpose {
-                    OpenPurpose::Document => self.guard(Pending::OpenBytes { name, bytes, path }),
+                    // File > Open already asked about unsaved changes before
+                    // showing the picker, so don't ask a second time.
+                    OpenPurpose::Document => self.run_pending(Pending::OpenBytes { name, bytes, path }),
+                    OpenPurpose::Dropped => self.open_dropped(name, bytes, path),
                     OpenPurpose::AsLayer => match io::decode_image(&bytes) {
                         Ok(img) => self.paste_image(img, Some(io::stem(&name))),
                         Err(e) => self.say(e),
@@ -494,41 +497,33 @@ impl PaintApp {
     }
 
     fn handle_dropped_files(&mut self, ctx: &egui::Context) {
-        let dropped = ctx.input(|i| i.raw.dropped_files.clone());
-        for f in dropped {
-            let name = f.path.as_ref().and_then(|p| p.file_name()).map(|n| n.to_string_lossy().to_string()).unwrap_or(f.name.clone());
-            let bytes = match (&f.bytes, &f.path) {
-                (Some(b), _) => b.to_vec(),
-                #[cfg(not(target_arch = "wasm32"))]
-                (None, Some(p)) => match std::fs::read(p) {
-                    Ok(b) => b,
-                    Err(e) => {
-                        self.say(format!("Can't read {name}: {e}"));
-                        continue;
-                    }
-                },
-                _ => continue,
-            };
-            let lower = name.to_lowercase();
-            if lower.ends_with(".ttf") || lower.ends_with(".otf") {
-                match self.fonts.add(&name, bytes) {
-                    Ok(i) => {
-                        self.prefs.tools.text_font = i;
-                        self.say(format!("Loaded font {name}"));
-                    }
-                    Err(e) => self.say(e),
+        // Contents arrive through the platform channel (reading is async on the web).
+        for f in ctx.input(|i| i.raw.dropped_files.clone()) {
+            self.platform.read_dropped(f);
+        }
+    }
+
+    /// Open a dropped file according to what it is.
+    fn open_dropped(&mut self, name: String, bytes: Vec<u8>, path: Option<std::path::PathBuf>) {
+        let lower = name.to_lowercase();
+        if lower.ends_with(".ttf") || lower.ends_with(".otf") {
+            match self.fonts.add(&name, bytes) {
+                Ok(i) => {
+                    self.prefs.tools.text_font = i;
+                    self.say(format!("Loaded font {name}"));
                 }
-            } else if lower.ends_with(".rhai") {
-                self.prefs.script = String::from_utf8_lossy(&bytes).to_string();
-                self.script_open = true;
-            } else if io::is_project(&bytes) || io::is_qpif(&bytes) {
-                self.guard(Pending::OpenBytes { name, bytes, path: f.path.clone() });
-            } else {
-                // Dropping an image adds it as a layer; use File > Open to replace.
-                match io::decode_image(&bytes) {
-                    Ok(img) => self.paste_image(img, Some(io::stem(&name))),
-                    Err(e) => self.say(e),
-                }
+                Err(e) => self.say(e),
+            }
+        } else if lower.ends_with(".rhai") {
+            self.prefs.script = String::from_utf8_lossy(&bytes).to_string();
+            self.script_open = true;
+        } else if io::is_project(&bytes) || io::is_qpif(&bytes) {
+            self.guard(Pending::OpenBytes { name, bytes, path });
+        } else {
+            // Dropping an image adds it as a layer; use File > Open to replace.
+            match io::decode_image(&bytes) {
+                Ok(img) => self.paste_image(img, Some(io::stem(&name))),
+                Err(e) => self.say(e),
             }
         }
     }

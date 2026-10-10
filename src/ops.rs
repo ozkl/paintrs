@@ -82,22 +82,23 @@ pub fn resample(img: &Image, w: u32, h: u32, method: ResampleMethod) -> Image {
         .px
         .iter()
         .flat_map(|p| {
+            // The image crate clamps float pixels to 0..1, so stay in that range.
             let a = p[3] as f32 / 255.0;
-            [p[0] as f32 * a, p[1] as f32 * a, p[2] as f32 * a, p[3] as f32]
+            [p[0] as f32 / 255.0 * a, p[1] as f32 / 255.0 * a, p[2] as f32 / 255.0 * a, a]
         })
         .collect();
     let buf = image::ImageBuffer::<image::Rgba<f32>, Vec<f32>>::from_raw(img.w, img.h, pre).expect("buffer");
     let scaled = image::imageops::resize(&buf, w, h, method.filter());
     let mut out = Image::new(w, h);
     for (o, p) in out.px.iter_mut().zip(scaled.pixels()) {
-        let a = p[3].clamp(0.0, 255.0);
-        *o = if a > 0.01 {
+        let a = p[3].clamp(0.0, 1.0);
+        *o = if a > 1e-4 {
             let k = 255.0 / a;
             [
                 (p[0] * k).round().clamp(0.0, 255.0) as u8,
                 (p[1] * k).round().clamp(0.0, 255.0) as u8,
                 (p[2] * k).round().clamp(0.0, 255.0) as u8,
-                a.round() as u8,
+                (a * 255.0).round() as u8,
             ]
         } else {
             [0, 0, 0, 0]
@@ -151,6 +152,17 @@ mod tests {
         for p in &out.px {
             if p[3] > 0 {
                 assert!(p[0] >= 250 && p[1] == 0, "{p:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn resample_keeps_opaque_images_opaque() {
+        let img = Image::filled(8, 8, [200, 100, 50, 255]);
+        for m in [ResampleMethod::Bilinear, ResampleMethod::Bicubic, ResampleMethod::Lanczos] {
+            for (w, h) in [(4, 4), (16, 16), (5, 11)] {
+                let out = resample(&img, w, h, m);
+                assert!(out.px.iter().all(|p| *p == [200, 100, 50, 255]), "{m:?} {w}x{h}: {:?}", out.px[0]);
             }
         }
     }

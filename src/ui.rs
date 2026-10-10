@@ -28,14 +28,14 @@ const PRESETS: &[(&str, u32, u32)] = &[
 impl PaintApp {
     pub fn draw_ui(&mut self, ui: &mut Ui) {
         let ctx = ui.ctx().clone();
-        egui::Panel::top("menu").show_inside(ui, |ui| self.menu_bar(ui));
-        egui::Panel::top("options").show_inside(ui, |ui| self.options_bar(ui));
-        egui::Panel::bottom("status").show_inside(ui, |ui| self.status_bar(ui));
-        egui::Panel::left("toolbox").resizable(false).exact_size(84.0).show_inside(ui, |ui| self.toolbox(ui));
-        egui::Panel::right("side").resizable(true).default_size(270.0).size_range(220.0..=420.0).show_inside(ui, |ui| {
+        egui::Panel::top("menu").show(ui, |ui| self.menu_bar(ui));
+        egui::Panel::top("options").show(ui, |ui| self.options_bar(ui));
+        egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
+        egui::Panel::left("toolbox").resizable(false).exact_size(84.0).show(ui, |ui| self.toolbox(ui));
+        egui::Panel::right("side").resizable(true).default_size(270.0).size_range(220.0..=420.0).show(ui, |ui| {
             egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| self.side_panel(ui));
         });
-        egui::CentralPanel::no_frame().show_inside(ui, |ui| self.canvas_ui(ui));
+        egui::CentralPanel::no_frame().show(ui, |ui| self.canvas_ui(ui));
         self.dialogs(&ctx);
         self.script_window(&ctx);
     }
@@ -457,8 +457,18 @@ impl PaintApp {
                 .fill(if active { ui.visuals().selection.bg_fill.gamma_multiply(0.6) } else { Color32::TRANSPARENT });
             let row = frame.show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    let eye = if l.visible { "👁" } else { "  " };
-                    if ui.add_sized(vec2(22.0, 22.0), egui::Button::new(eye).frame(false)).on_hover_text("Toggle visibility").clicked() {
+                    // Eye toggle: as tall as the thumbnail so it sits vertically centered.
+                    let (er, eye) = ui.allocate_exact_size(vec2(28.0, 40.0), Sense::click());
+                    if eye.hovered() {
+                        ui.painter().rect_filled(er.shrink2(vec2(1.0, 7.0)), 4.0, ui.visuals().widgets.hovered.weak_bg_fill);
+                    }
+                    let eye_color = if l.visible { ui.visuals().text_color() } else { ui.visuals().weak_text_color() };
+                    ui.painter().text(er.center(), egui::Align2::CENTER_CENTER, "👁", egui::FontId::proportional(20.0), eye_color);
+                    if !l.visible {
+                        let d = vec2(9.0, 8.0);
+                        ui.painter().line_segment([er.center() - d, er.center() + d], Stroke::new(2.0, Color32::from_rgb(235, 60, 60)));
+                    }
+                    if eye.on_hover_text(if l.visible { "Hide layer" } else { "Show layer" }).clicked() {
                         toggle_vis = Some(i);
                     }
                     let (r, _) = ui.allocate_exact_size(vec2(40.0, 40.0), Sense::hover());
@@ -507,7 +517,13 @@ impl PaintApp {
                     });
                 });
             });
-            if row.response.interact(Sense::click()).clicked() {
+            // Clicking anywhere else in the row selects the layer. Don't register
+            // the row as a widget of its own: it would sit on top of the eye
+            // button and the name and swallow their clicks.
+            if toggle_vis != Some(i)
+                && ui.rect_contains_pointer(row.response.rect)
+                && ui.input(|inp| inp.pointer.primary_clicked())
+            {
                 select = Some(i);
             }
         }

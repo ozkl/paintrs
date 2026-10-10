@@ -233,8 +233,7 @@ fn render(f: &mut Floating, cx: &mut Ctx) {
         let py = y as f32 + 0.5;
         let u = o + dx * px + dy * py;
         let c = if smooth {
-            let s = img.sample_bilinear(u.x, u.y);
-            [s[0].round() as u8, s[1].round() as u8, s[2].round() as u8, s[3].round().clamp(0.0, 255.0) as u8]
+            sample_area(img, u, dx, dy)
         } else {
             img.get(u.x.floor() as i32, u.y.floor() as i32)
         };
@@ -242,22 +241,66 @@ fn render(f: &mut Floating, cx: &mut Ctx) {
     });
 }
 
+/// How many samples one output pixel needs along each screen axis so that
+/// every source pixel under it contributes (1×1 when not shrinking).
+fn taps(dx: Vec2, dy: Vec2) -> (usize, usize) {
+    let n = |v: Vec2| (v.length().ceil() as usize).clamp(1, 16);
+    (n(dx), n(dy))
+}
+
+/// Smooth sample of the source area covered by one output pixel. `dx`/`dy`
+/// are the source-space steps for one output pixel. When shrinking, this
+/// averages bilinear samples across that footprint instead of skipping
+/// source pixels, which is what makes thin lines break up.
+fn sample_area(img: &Image, u: Pos2, dx: Vec2, dy: Vec2) -> [u8; 4] {
+    let (nx, ny) = taps(dx, dy);
+    // Accumulate premultiplied so transparent pixels don't tint the result.
+    let mut acc = [0.0f32; 4];
+    for j in 0..ny {
+        for i in 0..nx {
+            let p = u + dx * ((i as f32 + 0.5) / nx as f32 - 0.5) + dy * ((j as f32 + 0.5) / ny as f32 - 0.5);
+            let s = img.sample_bilinear(p.x, p.y);
+            acc[0] += s[0] * s[3];
+            acc[1] += s[1] * s[3];
+            acc[2] += s[2] * s[3];
+            acc[3] += s[3];
+        }
+    }
+    if acc[3] <= 1e-4 {
+        return [0, 0, 0, 0];
+    }
+    let a = acc[3] / (nx * ny) as f32;
+    let ch = |v: f32| (v / acc[3]).round().clamp(0.0, 255.0) as u8;
+    [ch(acc[0]), ch(acc[1]), ch(acc[2]), a.round().clamp(0.0, 255.0) as u8]
+}
+
 fn transform_mask(f: &Floating, m: &Mask, w: u32, h: u32, smooth: bool) -> Mask {
     let mut out = Mask::new(w, h);
     let r = f.screen_bounds().clamp_to(w, h);
+    let o = f.unmap(pos2(0.0, 0.0));
+    let dx = f.unmap(pos2(1.0, 0.0)) - o;
+    let dy = f.unmap(pos2(0.0, 1.0)) - o;
     for y in r.y0..r.y1 {
         for x in r.x0..r.x1 {
             let u = f.unmap(pos2(x as f32 + 0.5, y as f32 + 0.5));
             let v = if smooth {
-                let fx = u.x - 0.5;
-                let fy = u.y - 0.5;
-                let (x0, y0) = (fx.floor() as i32, fy.floor() as i32);
-                let (tx, ty) = (fx - x0 as f32, fy - y0 as f32);
-                let g = |a: i32, b: i32| m.getf(a, b);
-                g(x0, y0) * (1.0 - tx) * (1.0 - ty)
-                    + g(x0 + 1, y0) * tx * (1.0 - ty)
-                    + g(x0, y0 + 1) * (1.0 - tx) * ty
-                    + g(x0 + 1, y0 + 1) * tx * ty
+                let (nx, ny) = taps(dx, dy);
+                let mut acc = 0.0;
+                for j in 0..ny {
+                    for i in 0..nx {
+                        let p = u + dx * ((i as f32 + 0.5) / nx as f32 - 0.5) + dy * ((j as f32 + 0.5) / ny as f32 - 0.5);
+                        let fx = p.x - 0.5;
+                        let fy = p.y - 0.5;
+                        let (x0, y0) = (fx.floor() as i32, fy.floor() as i32);
+                        let (tx, ty) = (fx - x0 as f32, fy - y0 as f32);
+                        let g = |a: i32, b: i32| m.getf(a, b);
+                        acc += g(x0, y0) * (1.0 - tx) * (1.0 - ty)
+                            + g(x0 + 1, y0) * tx * (1.0 - ty)
+                            + g(x0, y0 + 1) * (1.0 - tx) * ty
+                            + g(x0 + 1, y0 + 1) * tx * ty;
+                    }
+                }
+                acc / (nx * ny) as f32
             } else {
                 m.getf(u.x.floor() as i32, u.y.floor() as i32)
             };
@@ -465,5 +508,49 @@ impl Tool for TransformTool {
             && let Some(f) = &mut self.float {
                 render(f, cx);
             }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn checker(n: u32) -> Image {
+        let mut img = Image::new(n, n);
+        for y in 0..n as i32 {
+            for x in 0..n as i32 {
+                let v = if (x + y) % 2 == 0 { 255 } else { 0 };
+                img.set(x, y, [v, v, v, 255]);
+            }
+        }
+        img
+    }
+
+    #[test]
+    fn shrinking_averages_instead_of_skipping() {
+        // A 1px checkerboard at 25% must come out mid-gray everywhere;
+        // point sampling would give pure black or white.
+        let img = checker(16);
+        for (x, y) in [(2.0, 2.0), (6.0, 10.0), (9.5, 5.5)] {
+            let c = sample_area(&img, pos2(x, y), vec2(4.0, 0.0), vec2(0.0, 4.0));
+            assert!((120..=135).contains(&c[0]), "{c:?} at {x},{y}");
+            assert_eq!(c[3], 255);
+        }
+    }
+
+    #[test]
+    fn unscaled_sampling_is_exact() {
+        let img = checker(8);
+        let c = sample_area(&img, pos2(2.5, 3.5), vec2(1.0, 0.0), vec2(0.0, 1.0));
+        assert_eq!(c, img.get(2, 3));
+    }
+
+    #[test]
+    fn transparent_pixels_do_not_darken() {
+        let mut img = Image::new(8, 8);
+        img.set(3, 3, [255, 0, 0, 255]);
+        let c = sample_area(&img, pos2(4.0, 4.0), vec2(4.0, 0.0), vec2(0.0, 4.0));
+        assert_eq!((c[0], c[1], c[2]), (255, 0, 0));
+        assert!(c[3] > 0 && c[3] < 255);
     }
 }

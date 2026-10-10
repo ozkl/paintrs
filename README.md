@@ -6,7 +6,7 @@ browser (WebAssembly + WebGL).
 
 ## Building
 
-Requires Rust 1.93+ (`rustup`). For the web build, also install
+Requires Rust 1.95+ (`rustup`). For the web build, also install
 [Trunk](https://trunkrs.dev) and the wasm target:
 
 ```bash

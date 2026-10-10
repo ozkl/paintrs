@@ -12,6 +12,8 @@ pub enum OpenPurpose {
     AsLayer,
     Font,
     Script,
+    /// Dropped onto the window; the app decides by content.
+    Dropped,
 }
 
 pub enum FileEvent {
@@ -98,6 +100,33 @@ impl Platform {
         };
         let _ = self.tx.send(ev);
         self.ctx.request_repaint();
+    }
+
+    /// Read a file dropped onto the window and deliver it as an `Opened` event.
+    pub fn read_dropped(&self, file: egui::DroppedFileHandle) {
+        let name = file.path().file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let ev = match file.bytes() {
+                Ok(bytes) => FileEvent::Opened { name, bytes, purpose: OpenPurpose::Dropped, path: Some(file.path().to_path_buf()) },
+                Err(e) => FileEvent::Error(format!("Can't read {name}: {e}")),
+            };
+            let _ = self.tx.send(ev);
+            self.ctx.request_repaint();
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            let tx = self.tx.clone();
+            let ctx = self.ctx.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                let ev = match file.bytes_async().await {
+                    Ok(bytes) => FileEvent::Opened { name, bytes, purpose: OpenPurpose::Dropped, path: None },
+                    Err(e) => FileEvent::Error(format!("Can't read {name}: {e}")),
+                };
+                let _ = tx.send(ev);
+                ctx.request_repaint();
+            });
+        }
     }
 
     pub fn save(&self, req: SaveRequest) {
