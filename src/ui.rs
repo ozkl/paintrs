@@ -98,7 +98,8 @@ impl PaintApp {
                 self.item(ui, "Paste", Action::Paste, true);
                 self.item(ui, "Paste as New Image", Action::PasteNewImage, true);
                 ui.separator();
-                self.item(ui, "Clear Selection Area", Action::Clear, has_sel);
+                self.item(ui, "Clear Selection", Action::Deselect, has_sel);
+                self.item(ui, "Delete Selected Pixels", Action::Clear, has_sel);
                 self.item(ui, "Fill with Primary", Action::FillPrimary, true);
                 self.item(ui, "Fill with Secondary", Action::FillSecondary, true);
                 ui.separator();
@@ -106,7 +107,7 @@ impl PaintApp {
             });
             ui.menu_button("Select", |ui| {
                 self.item(ui, "All", Action::SelectAll, true);
-                self.item(ui, "Deselect", Action::Deselect, has_sel);
+                self.item(ui, "Clear Selection", Action::Deselect, has_sel);
                 self.item(ui, "Invert", Action::InvertSelection, true);
                 self.item(ui, "Layer Pixels", Action::SelectOpaque, true);
                 ui.separator();
@@ -914,7 +915,7 @@ impl PaintApp {
                             ("Paste", Paste),
                             ("Free transform", FreeTransform),
                             ("Select all", SelectAll),
-                            ("Deselect", Deselect),
+                            ("Clear selection", Deselect),
                             ("Invert selection", InvertSelection),
                             ("New layer", NewLayer),
                             ("Duplicate layer", DuplicateLayer),

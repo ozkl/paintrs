@@ -3,7 +3,7 @@
 
 use egui::{Pos2, Ui, pos2};
 
-use super::{Btn, Ctx, OverlayCx, Tool, drag_rect, flood_region, norm_rect, percent, sample_source, select_op_buttons};
+use super::{Btn, Ctx, OverlayCx, Tool, clear_selection_button, drag_rect, flood_region, norm_rect, percent, sample_source, select_op_buttons};
 use crate::raster::{Coverage, IRect, Mask, SelectOp, ellipse_points};
 
 /// Combine freshly rasterized coverage with the current selection.
@@ -20,7 +20,7 @@ fn commit_selection(cx: &mut Ctx, rect: IRect, op: SelectOp, label: &str) {
 }
 
 fn deselect(cx: &mut Ctx) {
-    cx.doc.set_selection(cx.history, "Deselect", None);
+    cx.doc.set_selection(cx.history, "Clear selection", None);
 }
 
 fn op_label(op: SelectOp) -> &'static str {
@@ -115,6 +115,8 @@ impl Tool for SelectTool {
 
     fn options(&mut self, ui: &mut Ui, cx: &mut Ctx) {
         select_op_buttons(ui, &mut cx.s.select_op);
+        clear_selection_button(ui, cx);
+        ui.separator();
         ui.label("(Ctrl/Cmd while dragging: square)");
     }
 }
@@ -246,6 +248,7 @@ impl Tool for LassoTool {
 
     fn options(&mut self, ui: &mut Ui, cx: &mut Ctx) {
         select_op_buttons(ui, &mut cx.s.select_op);
+        clear_selection_button(ui, cx);
     }
 }
 
@@ -269,6 +272,7 @@ impl Tool for WandTool {
 
     fn options(&mut self, ui: &mut Ui, cx: &mut Ctx) {
         select_op_buttons(ui, &mut cx.s.select_op);
+        clear_selection_button(ui, cx);
         ui.separator();
         percent(ui, "Tolerance", &mut cx.s.wand_tolerance);
         ui.checkbox(&mut cx.s.wand_contiguous, "Contiguous");

@@ -605,6 +605,18 @@ pub fn select_op_buttons(ui: &mut Ui, op: &mut SelectOp) {
     }
 }
 
+/// "Clear selection" button for the selection tools' options bar.
+pub fn clear_selection_button(ui: &mut Ui, cx: &mut Ctx) {
+    let has = cx.doc.selection.is_some();
+    if ui
+        .add_enabled(has, egui::Button::new("✖ Clear selection"))
+        .on_hover_text("Ctrl/Cmd+D or Esc")
+        .clicked()
+    {
+        cx.doc.set_selection(cx.history, "Clear selection", None);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

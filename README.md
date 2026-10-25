@@ -4,6 +4,14 @@ A layered paint program written in Rust with [egui](https://github.com/emilk/egu
 The same code runs as a native desktop app (macOS, Linux, Windows) and in the
 browser (WebAssembly + WebGL).
 
+**Try it in the browser:** https://ozkl.github.io/paintrs/
+
+## Publishing
+
+- **Web app:** every push to `main` runs the tests and, if they pass, deploys to
+  GitHub Pages (`.github/workflows/pages.yml`). One-time setup:
+  *Settings ▸ Pages ▸ Source: GitHub Actions*.
+
 ## Building
 
 Requires Rust 1.95+ (`rustup`). For the web build, also install

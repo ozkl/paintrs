@@ -726,7 +726,7 @@ impl PaintApp {
                 tools.transform.lift(&mut cx);
             }
             SelectAll => self.doc.set_selection(&mut self.history, "Select all", Some(Mask::full(w, h))),
-            Deselect => self.doc.set_selection(&mut self.history, "Deselect", None),
+            Deselect => self.doc.set_selection(&mut self.history, "Clear selection", None),
             InvertSelection => {
                 let mut m = self.doc.selection.clone().unwrap_or_else(|| Mask::new(w, h));
                 m.invert();
