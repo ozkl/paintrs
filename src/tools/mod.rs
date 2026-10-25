@@ -303,8 +303,11 @@ impl OverlayCx<'_> {
     }
 
     pub fn round_handle(&self, p: Pos2, color: Color32) {
+        // White ring plus a dark outer ring so the handle shows on any
+        // background, even when its fill matches the pixels underneath.
         let s = self.view.to_screen(p);
-        self.painter.circle(s, 5.0, color, Stroke::new(1.5, Color32::WHITE));
+        self.painter.circle(s, 6.0, color, Stroke::new(1.5, Color32::WHITE));
+        self.painter.circle_stroke(s, 7.5, Stroke::new(1.0, Color32::from_black_alpha(200)));
     }
 
     /// A line visible on any background.
